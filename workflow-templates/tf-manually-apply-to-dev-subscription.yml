@@ -1,0 +1,166 @@
+name: Manually apply terraform at branch/tag/sha to Dev
+on: 
+  workflow_dispatch:
+    inputs:
+      branch-tag-sha:
+        description:  The branch, tag or sha of the terraform that should be deployed to the Dev environment.
+        required: true
+    environment:
+        description:  The environment to Deploy To.
+        required: true
+
+env: 
+  storageAccount: 'bdaimdna26levelupsa'  
+  resourceGroup: 'BDAIM-D-NA26-level-up-RGRP'
+  planStorageContainer: 'tfstate'
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_ENVIRONMENT: 'public'
+  TF_IN_AUTOMATION: 'true'
+
+
+jobs:
+    validate-input:
+    needs: stakeholder-approval
+    runs-on: [ubuntu-20.04]
+    steps:
+      - name: Clean Environment Input
+        id: clean-env
+        uses: im-open/map-input-action@v1
+        with:
+          input: ${{ github.event.inputs.someInput }}
+          input_map: "{ \"Dev\": [\"dev\", \"d\", \"development\"], \"QA\": [\"qa\", \"q\"], \"Stage\": [\"stg\", \"s\", \"stage\"]  }"
+
+      - name: Check if environment is Dev, QA or Stage
+        if: ${{ steps.clean-env.outputs.mapped_input != 'Dev' &&  steps.clean-env.outputs.mapped_input != 'QA' &&  steps.clean-env.outputs.mapped_input != 'Stage'}}
+        run: |
+            echo "::error::The environment must be Dev, QA or Stage";
+            exit 1
+  tf-plan:
+    runs-on: [self-hosted, ubuntu-20.04]
+    environment: ${{github.events.inputs.environment}}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{github.events.inputs.environment}}
+    
+    outputs:
+      tf_plan_name: ${{steps.upload.outputs.tf_plan_name}}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.inputs.branch-tag-sha }}
+
+      - name: AZ Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Terraform
+        id: setup
+        uses: hashicorp/setup-terraform@v1.2.1
+        with:
+          terraform_version: ~>0.15.0
+      
+      - name: Terraform Init
+        id: init
+        run: terraform init
+      
+      - name: Terraform Plan
+        id: plan
+        run: |
+          mkdir plans
+          terraform plan -no-color -var="pagerduty_token=${{secrets.PAGERDUTY_TOKEN}}" -var="windows_machine=false" -var="prod_subscription_id=${{secrets.PROD_SUBSCRIPTION_ID}}" -out=./plans/tfplan
+
+        
+      - name: Upload plan to blob storage
+        id: upload
+        shell: pwsh
+        run: |
+          $currentTime = Get-Date -Format "yyyymmdd-HHmmss"
+          $terraformPlanName = "$(Get-Date -Format 'yyyymmdd-HHmmss').plan.zip"
+          $terraformBlobName = "plans/$terraformPlanName"
+
+          Add-Type -Assembly "System.IO.Compression.FileSystem"
+          [System.IO.Compression.ZipFile]::CreateFromDirectory("plans", $terraformPlanName)
+
+          echo "Terraform Plan Name: $terraformPlanName"
+          echo "current directory:"
+          ls -R
+
+          echo "Uploading tf plan to azure storage account ${{env.storageAccount}}"
+          $key = az storage account keys list --account-name ${{env.storageAccount}} --resource-group ${{env.resourceGroup}} --query [0].value -o tsv
+          az storage blob upload --no-progress --auth-mode key --account-key $key --account-name ${{env.storageAccount}} --container-name ${{env.planStorageContainer}} --file $terraformPlanName --name $terraformBlobName
+          echo "The plan was successfully uploaded"
+          
+          echo "::set-output name=tf_plan_name::$terraformPlanName"
+      
+  technical-approval:
+    needs: tf-plan
+    runs-on: [ubuntu-20.04]
+    environment: 'Technical Approval'
+    steps:
+      - name: Technical Aproval Received
+        run: |
+          echo "Technical approval on the tf plan was received"
+
+  tf-apply:
+    needs: [technical-approval, tf-plan]
+    runs-on: [self-hosted, ubuntu-20.04]
+    environment: ${{github.events.inputs.environment}}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{github.events.inputs.environment}}
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.inputs.branch-tag-sha }}
+
+      - name: AZ Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Terraform
+        id: setup
+        uses: hashicorp/setup-terraform@v1.2.1
+        with:
+          terraform_version: ~>0.15.0
+      
+     
+      - name: Download blob
+        shell: pwsh
+        run: |
+          mkdir plans
+          echo "Current working directory: $pwd"
+          $terraformBlobName = "plans/${{needs.tf-plan.outputs.tf_plan_name}}"
+          echo "The blob name is: $terraformBlobName"
+          
+          Write-Host "Download blob to ./plans"
+          $key = az storage account keys list --account-name ${{env.storageAccount}} --resource-group ${{env.resourceGroup}} --query [0].value -o tsv
+          az storage blob download --no-progress --auth-mode key --account-key $key --account-name ${{env.storageAccount}} --container-name ${{env.planStorageContainer}} --file $pwd/$terraformBlobName --name $terraformBlobName
+          
+          try {
+            [System.IO.Compression.ZipFile]::ExtractToDirectory("$pwd/$terraformBlobName", "$pwd/plans")    
+          }
+          catch {
+            # Even though it hits this catch block the archive is extracted as expected.  No good explanation.
+          }
+
+          Write-Host "Zip extracted"
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -no-color -input=false -auto-approve ./plans/tfplan
