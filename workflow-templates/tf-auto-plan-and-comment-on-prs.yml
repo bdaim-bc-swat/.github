@@ -2,19 +2,23 @@ name: Automatically run tf plan and comment on PR
 on: 
   pull_request:
     types: [opened, reopened, synchronize]
-  
+
+env:
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_ENVIRONMENT: 'public'
+  TF_IN_AUTOMATION: 'true'
+  SSH_KEY_CENTRAL_LOGGING: ${{secrets.SSH_CENTRAL_LOGGING}}
+  SSH_KEY_STORAGE_ACCOUNT: ${{secrets.SSH_STORAGE_ACCOUNT}}
+  SSH_KEY_ON_PREM_EGRESS: ${{secrets.SSH_ON_PREM_EGRESS}}
+
 jobs:
   auto-plan-the-tf:
     runs-on: [self-hosted, ubuntu-20.04]
 
     environment: 'Dev'
-    env:
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-      ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      ARM_ENVIRONMENT: 'public'
-      TF_IN_AUTOMATION: 'true' 
     
     defaults:
       run:
@@ -30,6 +34,16 @@ jobs:
         uses: hashicorp/setup-terraform@v1.2.1
         with:
           terraform_version: ~>0.15.0
+
+      - name: Setup SSH Keys and known_hosts
+        uses: im-open/setup-deploy-keys@1.0.1
+        with:
+          deploy-key-info: |
+            [
+              { "orgAndRepo": "im-platform/central-logging", "envName" : "SSH_KEY_CENTRAL_LOGGING" },
+              { "orgAndRepo": "im-platform/storage-account-network-rules", "envName" : "SSH_KEY_STORAGE_ACCOUNT" },
+              { "orgAndRepo": "im-platform/on-prem-egress-ips", "envName" : "SSH_KEY_ON_PREM_EGRESS" }
+            ]
       
       - name: Terraform Init
         id: init
