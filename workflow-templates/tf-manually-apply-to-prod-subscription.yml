@@ -10,15 +10,18 @@ on:
         required: true
 
 env: 
-  storageAccount: 'bdaimpna26levelupsa'  
-  resourceGroup: 'BDAIM-P-NA26-LevelUp-RGRP'
-  planStorageContainer: 'tfstate'
+  STORAGE_ACCOUNT: 'bdaimpna26yourappsa'  
+  RESOURCE_GROUP: 'BDAIM-P-NA26-your-app-here-RGRP'
+  PLAN_STORAGE_CONTAINER: 'tfstate'
   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
   ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
   ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
   ARM_ENVIRONMENT: 'public'
   TF_IN_AUTOMATION: 'true'
+  SSH_KEY_CENTRAL_LOGGING: ${{secrets.SSH_CENTRAL_LOGGING}}
+  SSH_KEY_STORAGE_ACCOUNT: ${{secrets.SSH_STORAGE_ACCOUNT}}
+  SSH_KEY_ON_PREM_EGRESS: ${{secrets.SSH_ON_PREM_EGRESS}}
 
 
 jobs:
@@ -87,6 +90,16 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag }}
 
+      - name: Setup SSH Keys and known_hosts
+        uses: im-open/setup-deploy-keys@1.0.1
+        with:
+          deploy-key-info: |
+            [
+              { "orgAndRepo": "im-platform/central-logging", "envName" : "SSH_KEY_CENTRAL_LOGGING" },
+              { "orgAndRepo": "im-platform/storage-account-network-rules", "envName" : "SSH_KEY_STORAGE_ACCOUNT" },
+              { "orgAndRepo": "im-platform/on-prem-egress-ips", "envName" : "SSH_KEY_ON_PREM_EGRESS" }
+            ]
+            
       - name: AZ Login
         uses: azure/login@v1
         with:
@@ -123,9 +136,9 @@ jobs:
           echo "current directory:"
           ls -R
 
-          echo "Uploading tf plan to azure storage account ${{env.storageAccount}}"
-          $key = az storage account keys list --account-name ${{env.storageAccount}} --resource-group ${{env.resourceGroup}} --query [0].value -o tsv
-          az storage blob upload --no-progress --auth-mode key --account-key $key --account-name ${{env.storageAccount}} --container-name ${{env.planStorageContainer}} --file $terraformPlanName --name $terraformBlobName
+          echo "Uploading tf plan to azure storage account ${{env.STORAGE_ACCOUNT}}"
+          $key = az storage account keys list --account-name ${{env.STORAGE_ACCOUNT}} --resource-group ${{env.RESOURCE_GROUP}} --query [0].value -o tsv
+          az storage blob upload --no-progress --auth-mode key --account-key $key --account-name ${{env.STORAGE_ACCOUNT}} --container-name ${{env.PLAN_STORAGE_CONTAINER}} --file $terraformPlanName --name $terraformBlobName
           echo "The plan was successfully uploaded"
           
           echo "::set-output name=tf_plan_name::$terraformPlanName"
@@ -155,6 +168,16 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag }}
 
+      - name: Setup SSH Keys and known_hosts
+        uses: im-open/setup-deploy-keys@1.0.1
+        with:
+          deploy-key-info: |
+            [
+              { "orgAndRepo": "im-platform/central-logging", "envName" : "SSH_KEY_CENTRAL_LOGGING" },
+              { "orgAndRepo": "im-platform/storage-account-network-rules", "envName" : "SSH_KEY_STORAGE_ACCOUNT" },
+              { "orgAndRepo": "im-platform/on-prem-egress-ips", "envName" : "SSH_KEY_ON_PREM_EGRESS" }
+            ]
+
       - name: AZ Login
         uses: azure/login@v1
         with:
@@ -176,8 +199,8 @@ jobs:
           echo "The blob name is: $terraformBlobName"
           
           Write-Host "Download blob to ./plans"
-          $key = az storage account keys list --account-name ${{env.storageAccount}} --resource-group ${{env.resourceGroup}} --query [0].value -o tsv
-          az storage blob download --no-progress --auth-mode key --account-key $key --account-name ${{env.storageAccount}} --container-name ${{env.planStorageContainer}} --file $pwd/$terraformBlobName --name $terraformBlobName
+          $key = az storage account keys list --account-name ${{env.STORAGE_ACCOUNT}} --resource-group ${{env.RESOURCE_GROUP}} --query [0].value -o tsv
+          az storage blob download --no-progress --auth-mode key --account-key $key --account-name ${{env.STORAGE_ACCOUNT}} --container-name ${{env.PLAN_STORAGE_CONTAINER}} --file $pwd/$terraformBlobName --name $terraformBlobName
           
           try {
             [System.IO.Compression.ZipFile]::ExtractToDirectory("$pwd/$terraformBlobName", "$pwd/plans")    

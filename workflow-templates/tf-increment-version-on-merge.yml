@@ -17,7 +17,7 @@ jobs:
 
       - name: Increment the version
         run: |
-          tag=$(git describe --tags --abbrev=0)
+          tag=$(git describe --tags --abbrev=0) || tag=v1.0.-1
           echo "The latest tag is: $tag"
 
           IFS='.'
