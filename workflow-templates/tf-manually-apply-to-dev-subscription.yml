@@ -10,9 +10,10 @@ on:
         required: true
 
 env: 
-  STORAGE_ACCOUNT: 'bdaimdna26yourappsa'  
-  RESOURCE_GROUP: 'BDAIM-D-NA26-your-app-here-RGRP'
-  PAGERDUTY_SERVICE_IDS: '[ "P0XXXXX", "ADD_YOUR_SERVICE_ID(S)" ]'
+  STORAGE_ACCOUNT: 'bdaimdna26yourappsa'                            # TODO:  Add your STG Account Here
+  RESOURCE_GROUP: 'BDAIM-D-NA26-your-app-here-RGRP'                 # TODO:  Add your RGRP here
+  PAGERDUTY_SERVICE_IDS: '[ "P0XXXXX", "ADD_YOUR_SERVICE_ID(S)" ]'  # TODO:  Add your PD Service IDs here
+  PAGERDUTY_WINDOW_IN_MIN: 30                                       # TODO:  Verify the length of your PD Maintenance Window
   PLAN_STORAGE_CONTAINER: 'tfstate'
   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
@@ -37,6 +38,7 @@ jobs:
           input: ${{ github.event.inputs.environment }}
           input_map: "{ \"Dev\": [\"dev\", \"d\", \"development\"], \"QA\": [\"qa\", \"q\"], \"Stage\": [\"stg\", \"s\", \"stage\"]  }"
 
+      # TODO:  Update if you don't use all these environments in the Development Subscription
       - name: Check if environment is Dev, QA or Stage
         if: ${{ steps.clean-env.outputs.mapped_input != 'Dev' &&  steps.clean-env.outputs.mapped_input != 'QA' &&  steps.clean-env.outputs.mapped_input != 'Stage'}}
         run: |
@@ -50,7 +52,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ${{github.events.inputs.environment}}
+        working-directory: ${{ github.events.inputs.environment }} # TODO:  Verify this is correct for your repository
     
     outputs:
       tf_plan_name: ${{steps.upload.outputs.tf_plan_name}}
@@ -77,8 +79,8 @@ jobs:
         uses: im-open/open-pagerduty-maintenance-window@v1.0.0
         with:
           pagerduty-api-key: ${{secrets.PAGERDUTY_API_KEY}}
-          description: 'Deploying Infrastructure to the ${{ github.event.inputs.environment }} environment from GitHub Actions'
-          minutes: 30
+          description: 'Deploying Infrastructure to the ${{ github.event.inputs.environment }} environment from GitHub Actions' # TODO:  Verify this description
+          minutes: ${{ env.PAGERDUTY_WINDOW_IN_MIN }}
           service-ids: ${{ env.PAGERDUTY_SERVICE_IDS }}
 
       - name: AZ Login
@@ -90,7 +92,7 @@ jobs:
         id: setup
         uses: hashicorp/setup-terraform@v1.2.1
         with:
-          terraform_version: ~>0.15.0
+          terraform_version: ~>0.15.5 # TODO:  Verify the tf version
       
       - name: Terraform Init
         id: init
@@ -100,8 +102,9 @@ jobs:
         id: plan
         run: |
           mkdir plans
-          terraform plan -no-color -var="pagerduty_token=${{secrets.PAGERDUTY_TOKEN}}" -var="windows_machine=false" -var="prod_subscription_id=${{secrets.PROD_SUBSCRIPTION_ID}}" -out=./plans/tfplan
-
+          terraform plan -no-color \
+            -var="pagerduty_token=${{secrets.PAGERDUTY_TOKEN}}" \
+            -out=./plans/tfplan
         
       - name: Upload plan to blob storage
         id: upload
@@ -130,7 +133,7 @@ jobs:
     runs-on: [ubuntu-20.04]
     environment: 'Technical Approval'
     steps:
-      - name: Technical Aproval Received
+      - name: Technical Approval Received
         run: |
           echo "Technical approval on the tf plan was received"
 
@@ -142,7 +145,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ${{github.events.inputs.environment}}
+        working-directory: ${{ github.events.inputs.environment }} # TODO:  Verify this is correct for your repository
     
     steps:
       - name: Checkout Repository
@@ -169,9 +172,8 @@ jobs:
         id: setup
         uses: hashicorp/setup-terraform@v1.2.1
         with:
-          terraform_version: ~>0.15.0
+          terraform_version: ~>0.15.5 # TODO:  Verify the tf version
       
-     
       - name: Download blob
         shell: pwsh
         run: |
@@ -198,7 +200,7 @@ jobs:
         run: terraform init
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -no-color -input=false -auto-approve ./plans/tfplan
+        run: terraform apply -auto-approve -no-color -input=false ./plans/tfplan
       
       - name: Close the PagerDuty Maintenance Window
         uses: im-open/close-pagerduty-maintenance-window@v1.0.0
