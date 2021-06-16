@@ -4,6 +4,7 @@ on:
     types: [closed]
 
 env:
+  PAGERDUTY_SERVICE_IDS: '[ "P0XXXXX", "ADD_YOUR_SERVICE_ID(S)" ]'
   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
   ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
@@ -51,5 +52,20 @@ jobs:
         id: init
         run: terraform init
       
+      - name: Open a PagerDuty Maintenance Window
+        id: open-window
+        uses: im-open/open-pagerduty-maintenance-window@v1.0.0
+        with:
+          pagerduty-api-key: ${{secrets.PAGERDUTY_API_KEY}}
+          description: 'Auto apply main branch to Dev environment from GitHub Actions'
+          minutes: 10
+          service-ids: '[ "P0XXXXX" ]'
+
       - name: Terraform Apply
         run: terraform apply -auto-approve -var="pagerduty_token=${{secrets.PAGERDUTY_TOKEN}}" -var="windows_machine=false" -var="prod_subscription_id=${{secrets.PROD_SUBSCRIPTION_ID}}"
+
+      - name: Close the PagerDuty Maintenance Window
+        uses: im-open/close-pagerduty-maintenance-window@v1.0.0
+        with:
+          pagerduty-api-key: ${{secrets.PAGERDUTY_API_KEY}}
+          maintenance-window-id: ${{ steps.open-window.outputs.maintenance-window-id }}        

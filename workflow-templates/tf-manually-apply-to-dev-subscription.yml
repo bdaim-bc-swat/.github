@@ -12,6 +12,7 @@ on:
 env: 
   STORAGE_ACCOUNT: 'bdaimdna26yourappsa'  
   RESOURCE_GROUP: 'BDAIM-D-NA26-your-app-here-RGRP'
+  PAGERDUTY_SERVICE_IDS: '[ "P0XXXXX", "ADD_YOUR_SERVICE_ID(S)" ]'
   PLAN_STORAGE_CONTAINER: 'tfstate'
   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
@@ -33,7 +34,7 @@ jobs:
         id: clean-env
         uses: im-open/map-input-action@v1
         with:
-          input: ${{ github.event.inputs.someInput }}
+          input: ${{ github.event.inputs.environment }}
           input_map: "{ \"Dev\": [\"dev\", \"d\", \"development\"], \"QA\": [\"qa\", \"q\"], \"Stage\": [\"stg\", \"s\", \"stage\"]  }"
 
       - name: Check if environment is Dev, QA or Stage
@@ -53,6 +54,7 @@ jobs:
     
     outputs:
       tf_plan_name: ${{steps.upload.outputs.tf_plan_name}}
+      maintenance_window_id: ${{ steps.open-window.outputs.maintenance-window-id }} 
 
     steps:
       - name: Checkout Repository
@@ -69,6 +71,15 @@ jobs:
               { "orgAndRepo": "im-platform/storage-account-network-rules", "envName" : "SSH_KEY_STORAGE_ACCOUNT" },
               { "orgAndRepo": "im-platform/on-prem-egress-ips", "envName" : "SSH_KEY_ON_PREM_EGRESS" }
             ]
+
+      - name: Open a PagerDuty Maintenance Window
+        id: open-window
+        uses: im-open/open-pagerduty-maintenance-window@v1.0.0
+        with:
+          pagerduty-api-key: ${{secrets.PAGERDUTY_API_KEY}}
+          description: 'Deploying Infrastructure to the ${{ github.event.inputs.environment }} environment from GitHub Actions'
+          minutes: 30
+          service-ids: ${{ env.PAGERDUTY_SERVICE_IDS }}
 
       - name: AZ Login
         uses: azure/login@v1
@@ -188,3 +199,9 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -auto-approve -no-color -input=false -auto-approve ./plans/tfplan
+      
+      - name: Close the PagerDuty Maintenance Window
+        uses: im-open/close-pagerduty-maintenance-window@v1.0.0
+        with:
+          pagerduty-api-key: ${{secrets.PAGERDUTY_API_KEY}}
+          maintenance-window-id: ${{needs.tf-plan.outputs.maintenance_window_id}}          
