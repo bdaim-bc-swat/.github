@@ -23,7 +23,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./dev
+        working-directory: ./dev  # TODO:  Verify this is correct for your repository
 
     steps:
       - name: Checkout Repository
@@ -33,7 +33,7 @@ jobs:
         id: setup
         uses: hashicorp/setup-terraform@v1.2.1
         with:
-          terraform_version: ~>0.15.0
+          terraform_version: ~>0.15.5 # TODO:  Verify the tf version
 
       - name: Setup SSH Keys and known_hosts
         uses: im-open/setup-deploy-keys@1.0.1
@@ -55,8 +55,11 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        run: terraform plan -no-color -var="pagerduty_token=${{secrets.PAGERDUTY_TOKEN}}" -var="windows_machine=false" -var="prod_subscription_id=${{secrets.PROD_SUBSCRIPTION_ID}}"
+        run: |
+          terraform plan -no-color \
+          -var="pagerduty_token=${{secrets.PAGERDUTY_TOKEN}}" 
         continue-on-error: true
+      
       - name: 'Terraform Comment'
         uses: actions/github-script@v4
         env:
