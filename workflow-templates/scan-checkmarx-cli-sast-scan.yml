@@ -19,13 +19,14 @@ jobs:
           checkmarx-password: ${{ secrets.CHECKMARX_PASSWORD }}
           team: 'CxServer\SP\Company\Users\BDA_IndividualMarketplace\BDAOutSourceTeamCity' # Same for all IM scans
 
-          # TODO:  Add your App name and project type.
+          # TODO:  Add your App name and optional project type.
           # Required Format: IndividualMarketplace.[projectName].[optional-project-type]
-          project: IndividualMarketplace.DemoApp1.MFE
+          # Examples: (IndividualMarketplace.1UP or IndividualMarketplace.Shopping.Mfe)
+          project: ''
 
           # TODO:  Replace with any files or folders that need to be excluded from the scan.
-          # Default list at https://github.com/im-open/checkmarx-cli-sast-scan/tree/main#excluding-files-and-folders
-          exclude-paths: '!**/modernizr-custom.js,!**/_ViewImports.cshtml'
+          # Default list and format at https://github.com/im-open/checkmarx-cli-sast-scan/tree/main#excluding-files-and-folders
+          exclude-paths: ''
 
           # TODO:  Review default values and update/delete as applicable
           # report-name: 'CheckmarxSASTResults.pdf'
