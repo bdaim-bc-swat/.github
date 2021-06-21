@@ -1,5 +1,5 @@
 {
     "name": "Build - Dump Context Data to Console Workflow",
     "description": "Workflow template for dumping the data of each context.",
-    "iconName": "./auto_images/build.svg"
+    "iconName": "build"
 }
