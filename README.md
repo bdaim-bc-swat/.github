@@ -20,3 +20,4 @@ The following SVGs should generally be used for each of the categories.  If a wo
 
 #### Additional SVGs
 - tf
+- checkmarx
